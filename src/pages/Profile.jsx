@@ -1,19 +1,22 @@
 import { useEffect, useState } from "react";
 import { auth, db } from "./../firebase/config";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { Edit, LogOut, MapPin, Phone } from "lucide-react";
+import { Clock3, Edit, LogOut, Mail, MapPin, Phone, User } from "lucide-react";
 import toast from "react-hot-toast";
 
 const Profile = () => {
   const [user, setUser] = useState(null);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [bio, setBio] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
   const [openModal, setOpenModal] = useState(false);
+  const [form, setForm] = useState({
+    username: "",
+    bio: "",
+    phone: "",
+    address: "",
+  });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -30,6 +33,7 @@ const Profile = () => {
       try {
         const userRef = doc(db, "users", currentUser.uid);
         const userDoc = await getDoc(userRef);
+
         const fallbackProfile = {
           username:
             currentUser.displayName ||
@@ -40,26 +44,25 @@ const Profile = () => {
           bio: "",
           phone: "",
           address: "",
+          createdAt: null,
+          updatedAt: null,
         };
 
-        if (userDoc.exists()) {
-          const data = userDoc.data();
-          const mergedProfile = {
-            ...fallbackProfile,
-            ...data,
-          };
+        const profile = userDoc.exists()
+          ? { ...fallbackProfile, ...userDoc.data() }
+          : fallbackProfile;
 
-          setUser(mergedProfile);
-          setBio(mergedProfile.bio || "");
-          setPhone(mergedProfile.phone || "");
-          setAddress(mergedProfile.address || "");
-        } else {
-          setUser(fallbackProfile);
-          setBio("");
-          setPhone("");
-          setAddress("");
+        if (!userDoc.exists()) {
+          await setDoc(userRef, profile, { merge: true });
         }
 
+        setUser(profile);
+        setForm({
+          username: profile.username || "",
+          bio: profile.bio || "",
+          phone: profile.phone || "",
+          address: profile.address || "",
+        });
         setIsPageLoading(false);
       } catch (error) {
         console.log(error.message);
@@ -72,9 +75,12 @@ const Profile = () => {
   }, [navigate]);
 
   const handleOpenModal = () => {
-    setBio(user?.bio || "");
-    setPhone(user?.phone || "");
-    setAddress(user?.address || "");
+    setForm({
+      username: user?.username || "",
+      bio: user?.bio || "",
+      phone: user?.phone || "",
+      address: user?.address || "",
+    });
     setOpenModal(true);
   };
 
@@ -92,28 +98,29 @@ const Profile = () => {
     try {
       const updatedProfile = {
         username:
+          form.username.trim() ||
           currentUser.displayName ||
           user?.username ||
           currentUser.email?.split("@")[0] ||
           "User",
         email: currentUser.email || user?.email || "",
         role: user?.role || "user",
-        bio: bio.trim(),
-        phone: phone.trim(),
-        address: address.trim(),
+        bio: form.bio.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+        updatedAt: serverTimestamp(),
       };
 
-      await setDoc(
-        doc(db, "users", currentUser.uid),
-        updatedProfile,
-        { merge: true }
-      );
+      await setDoc(doc(db, "users", currentUser.uid), updatedProfile, {
+        merge: true,
+      });
 
       setUser((prev) =>
         prev
           ? {
               ...prev,
               ...updatedProfile,
+              updatedAt: new Date(),
             }
           : prev
       );
@@ -138,6 +145,24 @@ const Profile = () => {
     }
   };
 
+  const formatDate = (value) => {
+    if (!value) return null;
+    if (typeof value.toDate === "function") {
+      return value.toDate();
+    }
+    if (value instanceof Date) {
+      return value;
+    }
+    if (typeof value.seconds === "number") {
+      return new Date(value.seconds * 1000);
+    }
+    return null;
+  };
+
+  const joinedDate = formatDate(user?.createdAt);
+  const updatedDate = formatDate(user?.updatedAt);
+  const avatarInitial = user?.username?.charAt(0)?.toUpperCase() || "U";
+
   if (isPageLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center text-gray-500">
@@ -154,13 +179,11 @@ const Profile = () => {
     );
   }
 
-  const avatarInitial = user.username?.charAt(0)?.toUpperCase() || "U";
-
   return (
-    <div className="mx-auto w-full max-w-3xl p-5">
+    <div className="mx-auto w-full max-w-4xl p-5">
       <div className="overflow-hidden rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-orange-50 shadow-lg">
-        <div className="flex flex-col gap-5 p-5 md:flex-row md:items-start md:justify-between">
-          <div className="flex items-start gap-4">
+        <div className="flex flex-col gap-6 p-5 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-1 items-start gap-4">
             <div className="relative shrink-0">
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[tomato] text-3xl font-black text-white shadow-md shadow-orange-200">
                 {avatarInitial}
@@ -175,19 +198,37 @@ const Profile = () => {
               </button>
             </div>
 
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <p className="text-sm font-semibold uppercase tracking-[0.2em] text-amber-500">
                 Profile
               </p>
-              <div>
-                <h1 className="text-3xl font-bold text-slate-900">
+              <div className="space-y-1">
+                <h1 className="truncate text-3xl font-bold text-slate-900">
                   {user.username}
                 </h1>
-                <p className="text-sm text-slate-500">{user.email}</p>
+                <p className="flex items-center gap-2 text-sm text-slate-500">
+                  <Mail size={16} />
+                  <span className="truncate">{user.email}</span>
+                </p>
               </div>
-              <p className="max-w-xl text-sm leading-6 text-slate-600">
+              <p className="max-w-2xl text-sm leading-6 text-slate-600">
                 {user.bio || "No bio added yet"}
               </p>
+
+              <div className="flex flex-wrap gap-3 pt-1 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 ring-1 ring-amber-100">
+                  <Clock3 size={14} />
+                  {updatedDate
+                    ? `Updated ${updatedDate.toLocaleDateString()}`
+                    : "Not updated yet"}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 ring-1 ring-amber-100">
+                  <User size={14} />
+                  {joinedDate
+                    ? `Joined ${joinedDate.toLocaleDateString()}`
+                    : "Joined recently"}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -247,6 +288,25 @@ const Profile = () => {
 
             <div className="mt-5 space-y-4">
               <div className="space-y-2">
+                <label
+                  htmlFor="username"
+                  className="text-sm font-medium text-slate-700"
+                >
+                  Username
+                </label>
+                <input
+                  id="username"
+                  type="text"
+                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 outline-none transition focus:border-[tomato] focus:bg-white"
+                  value={form.username}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, username: e.target.value }))
+                  }
+                  placeholder="Your display name"
+                />
+              </div>
+
+              <div className="space-y-2">
                 <label htmlFor="bio" className="text-sm font-medium text-slate-700">
                   Bio
                 </label>
@@ -254,22 +314,29 @@ const Profile = () => {
                   id="bio"
                   rows={4}
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 outline-none transition focus:border-[tomato] focus:bg-white"
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
+                  value={form.bio}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, bio: e.target.value }))
+                  }
                   placeholder="Add something about you..."
                 />
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="phone" className="text-sm font-medium text-slate-700">
+                <label
+                  htmlFor="phone"
+                  className="text-sm font-medium text-slate-700"
+                >
                   Phone
                 </label>
                 <input
                   id="phone"
                   type="tel"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 outline-none transition focus:border-[tomato] focus:bg-white"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  value={form.phone}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, phone: e.target.value }))
+                  }
                   placeholder="+123-456-7890"
                 />
               </div>
@@ -285,8 +352,10 @@ const Profile = () => {
                   id="address"
                   type="text"
                   className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-3 outline-none transition focus:border-[tomato] focus:bg-white"
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  value={form.address}
+                  onChange={(e) =>
+                    setForm((prev) => ({ ...prev, address: e.target.value }))
+                  }
                   placeholder="Street address..."
                 />
               </div>
