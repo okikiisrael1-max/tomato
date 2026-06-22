@@ -1,4 +1,4 @@
-import { CoinsIcon, DollarSignIcon, LocationEditIcon, Mail, Phone, ShoppingBag, Trash2, User, X } from 'lucide-react'
+import { CoinsIcon, DollarSignIcon, LocationEditIcon, Mail, Phone, ShoppingBag, ShoppingBasket, Trash2, User, X } from 'lucide-react'
 import { useState } from 'react'
 import useCart from '../hooks/useCart'
 import { auth, db } from '../firebase/config';
@@ -95,6 +95,7 @@ const Cart = () => {
             <h1 className='font-bold text-2xl flex items-center gap-1.5'><ShoppingBag className='text-[tomato]' size={30} />Shopping Cart</h1>
 
             <div>
+            
                 {cart.map((items) => (
                     <div key={items.id} className='flex items-end gap-2.5
                  my-2.5 border-2 border-slate-100 p-2.5 rounded-lg'>
@@ -112,8 +113,15 @@ const Cart = () => {
                         </div>
                     </div>
                 ))}
+
+                {!cart.length && (
+                <div className='flex my-10 mx-auto flex-col justify-center items-center'>
+                    <ShoppingBasket className='text-gray-400' size={100}/>
+                    <p className='text-2xl text-gray-400'>Cart is empty!</p>
+                </div>
+            )}
                 <div className='flex flex-col gap-2.5'>
-                    <button onClick={() => navigate('/foods')} className='flex gap-1.5 h-10 bg-slate-400 w-full rounded-lg cursor-pointer text-white justify-center items-center'><ShoppingBag size={22} /> Shop More </button>
+                    <button onClick={() => navigate('/foods')} className='flex gap-1.5 h-10 bg-slate-600 w-full rounded-lg cursor-pointer text-white justify-center items-center'><ShoppingBag size={22} /> {!cart.length ? 'Explore Shop': 'Shop More'} </button>
 
                     <div className='mt-10'>
                         <p className='flex gap-1.5 font-medium'>- Total Items: <span className='text-[tomato]'>{cart.length}</span></p>
@@ -133,6 +141,7 @@ const Cart = () => {
                 </div>
 
             </div>
+            
 
             {modal && (
                 <div className='absolute z-51 backdrop-blur-lg min-h-screen overflow-y-scroll bg-black/50 top-0 left-0 w-full flex p-5'>
