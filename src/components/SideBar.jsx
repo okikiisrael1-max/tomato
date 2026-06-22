@@ -1,13 +1,37 @@
+import { useEffect, useState } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { signOut, onAuthStateChanged } from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
 import { ChevronRightIcon, LogOutIcon, SidebarClose, SidebarOpen } from 'lucide-react'
 import { assets } from './../assets/assets'
-import { useState } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { signOut } from 'firebase/auth'
-import { auth } from '../firebase/config'
+import { auth, db } from '../firebase/config'
 
 const SideBar = () => {
-   const navigate = useNavigate();
+  const navigate = useNavigate();
   const [openNav, setOpenNav] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(null)
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (!currentUser) {
+        setIsAdmin(false)
+        return
+      }
+
+      try {
+        const profileSnap = await getDoc(doc(db, 'users', currentUser.uid))
+        const profile = profileSnap.exists() ? profileSnap.data() : null
+
+        setIsAdmin(profile?.role === 'admin')
+      } catch (error) {
+        console.log(error)
+        setIsAdmin(false)
+      }
+    })
+
+    return () => unsubscribe()
+  }, [])
+
   const handleLogout = async ()=>{
     try{
       await signOut(auth);
@@ -45,7 +69,9 @@ const SideBar = () => {
 
       <NavLink onClick={() => setOpenNav(!openNav)}  to={'/contact'} className='flex p-2.5 my-1.5 font-medium cursor-pointer text-gray-600 text-[18px] hover:bg-amber-200/50 rounded-lg items-center justify-between'>Contact Us <ChevronRightIcon size={20}/> </NavLink>
 
-      <NavLink onClick={() => setOpenNav(!openNav)}  to={'/admin/orders'} className='flex p-2.5 my-1.5 font-medium cursor-pointer text-gray-600 text-[18px] hover:bg-amber-200/50 rounded-lg items-center justify-between'>Admin orders <ChevronRightIcon size={20}/> </NavLink>
+      {isAdmin && (
+        <NavLink onClick={() => setOpenNav(!openNav)}  to={'/admin/orders'} className='flex p-2.5 my-1.5 font-medium cursor-pointer text-gray-600 text-[18px] hover:bg-amber-200/50 rounded-lg items-center justify-between'>Admin orders <ChevronRightIcon size={20}/> </NavLink>
+      )}
       
       <span onClick={handleLogout} className='font-medium text-red-500 flex items-center mt-auto justify-between rounded-lg hover:bg-amber-200/50 text-lg cursor-pointer p-5'>LogOut <LogOutIcon size={22}/></span>
       </div>
